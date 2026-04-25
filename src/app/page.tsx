@@ -1,0 +1,723 @@
+"use client";
+
+import Image from "next/image";
+import { FormEvent, useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase/client";
+import { slugify } from "@/lib/utils";
+
+type Product = {
+  id: number;
+  name: string;
+  slug: string;
+  category: string;
+  price: number;
+  condition: "novo" | "usado";
+  description: string | null;
+  video_url: string | null;
+  cover_image: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+type ProductFormData = {
+  name: string;
+  category: string;
+  price: string;
+  condition: "novo" | "usado";
+  description: string;
+  video_url: string;
+  cover_image: string;
+  is_active: boolean;
+};
+
+const initialFormData: ProductFormData = {
+  name: "",
+  category: "",
+  price: "",
+  condition: "novo",
+  description: "",
+  video_url: "",
+  cover_image: "",
+  is_active: true,
+};
+
+export default function Home() {
+  const storageBucket = "product-images";
+  const [session, setSession] = useState<Session | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [formData, setFormData] = useState<ProductFormData>(initialFormData);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<number | null>(
+    null,
+  );
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  async function loadProducts() {
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    const { data, error } = await supabase
+      .from("products")
+      .select(
+        "id, name, slug, category, price, condition, description, video_url, cover_image, is_active, created_at",
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setProducts([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setProducts((data ?? []) as Product[]);
+    setIsLoading(false);
+  }
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initializeAuth() {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setSession(currentSession);
+      setIsLoading(false);
+
+      if (currentSession) {
+        void loadProducts();
+      }
+    }
+
+    void initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+
+      if (nextSession) {
+        void loadProducts();
+        return;
+      }
+
+      setProducts([]);
+      setEditingProductId(null);
+      setFormData(initialFormData);
+      setIsLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  function updateField<K extends keyof ProductFormData>(
+    field: K,
+    value: ProductFormData[K],
+  ) {
+    setFormData((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function startEditing(product: Product) {
+    setFeedback(null);
+    setErrorMessage(null);
+    setEditingProductId(product.id);
+    setFormData({
+      name: product.name,
+      category: product.category,
+      price: String(product.price),
+      condition: product.condition,
+      description: product.description ?? "",
+      video_url: product.video_url ?? "",
+      cover_image: product.cover_image ?? "",
+      is_active: product.is_active,
+    });
+  }
+
+  function resetForm() {
+    setEditingProductId(null);
+    setFormData(initialFormData);
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFeedback(null);
+    setErrorMessage(null);
+    setIsAuthenticating(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsAuthenticating(false);
+      return;
+    }
+
+    setAuthPassword("");
+    setFeedback("Login realizado com sucesso.");
+    setIsAuthenticating(false);
+  }
+
+  async function handleLogout() {
+    setFeedback(null);
+    setErrorMessage(null);
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setFeedback("Sessao encerrada com sucesso.");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFeedback(null);
+    setErrorMessage(null);
+
+    if (!formData.name.trim() || !formData.category.trim() || !formData.price) {
+      setErrorMessage("Preencha nome, categoria e preco antes de salvar.");
+      return;
+    }
+
+    const generatedSlug = slugify(formData.name);
+
+    if (!generatedSlug) {
+      setErrorMessage("Nao foi possivel gerar o slug do produto.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const payload = {
+      name: formData.name.trim(),
+      slug: generatedSlug,
+      category: formData.category.trim(),
+      price: Number(formData.price),
+      condition: formData.condition,
+      description: formData.description.trim() || null,
+      video_url: formData.video_url.trim() || null,
+      cover_image: formData.cover_image.trim() || null,
+      is_active: formData.is_active,
+    };
+
+    const { error } =
+      editingProductId === null
+        ? await supabase.from("products").insert(payload)
+        : await supabase
+            .from("products")
+            .update(payload)
+            .eq("id", editingProductId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    resetForm();
+    setFeedback(
+      editingProductId === null
+        ? "Produto cadastrado com sucesso."
+        : "Produto atualizado com sucesso.",
+    );
+    setIsSubmitting(false);
+    await loadProducts();
+  }
+
+  async function handleImageUpload(file: File) {
+    setFeedback(null);
+    setErrorMessage(null);
+    setIsUploadingImage(true);
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const fileName = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const filePath = `products/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(storageBucket)
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      setErrorMessage(uploadError.message);
+      setIsUploadingImage(false);
+      return;
+    }
+
+    const { data } = supabase.storage
+      .from(storageBucket)
+      .getPublicUrl(filePath);
+
+    updateField("cover_image", data.publicUrl);
+    setFeedback("Imagem enviada com sucesso.");
+    setIsUploadingImage(false);
+  }
+
+  async function handleDelete(productId: number) {
+    setFeedback(null);
+    setErrorMessage(null);
+    setDeletingProductId(productId);
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", productId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setDeletingProductId(null);
+      return;
+    }
+
+    setProducts((current) =>
+      current.filter((product) => product.id !== productId),
+    );
+    if (editingProductId === productId) {
+      resetForm();
+    }
+    setFeedback("Produto excluido com sucesso.");
+    setDeletingProductId(null);
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-5 py-8 text-foreground sm:px-8">
+        <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-6 sm:p-8">
+          <div className="mb-6 inline-flex rounded-full border border-brand/30 bg-brand-dark px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-brand">
+            083 Sertao Admin
+          </div>
+
+          <h1 className="text-3xl font-semibold tracking-tight text-white">
+            Entrar no painel
+          </h1>
+          <p className="mt-3 text-sm leading-7 text-card-foreground">
+            Use o usuario administrador criado no Supabase Auth para acessar o
+            CRUD de produtos.
+          </p>
+
+          <form className="mt-6 space-y-4" onSubmit={handleLogin}>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-white">E-mail</span>
+              <input
+                className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                type="email"
+                value={authEmail}
+                onChange={(event) => setAuthEmail(event.target.value)}
+                placeholder="admin@083sertao.com"
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-white">Senha</span>
+              <input
+                className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                placeholder="Sua senha"
+              />
+            </label>
+
+            {feedback ? (
+              <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white">
+                {feedback}
+              </div>
+            ) : null}
+
+            {errorMessage ? (
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <button
+              className="w-full rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              type="submit"
+              disabled={isAuthenticating}
+            >
+              {isAuthenticating ? "Entrando..." : "Entrar"}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-background px-5 py-8 text-foreground sm:px-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <section className="rounded-[28px] border border-border bg-card p-6 sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="mb-5 inline-flex rounded-full border border-brand/30 bg-brand-dark px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-brand">
+                083 Sertao Admin
+              </div>
+
+              <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+                CRUD de produtos conectado ao Supabase com login do admin.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-card-foreground sm:text-base">
+                Voce entrou como {session.user.email}. A partir daqui, o painel
+                fica pronto para operar com seguranca basica de autenticacao.
+              </p>
+            </div>
+
+            <button
+              className="rounded-full border border-border px-4 py-2 text-sm text-card-foreground transition hover:border-white hover:text-white"
+              type="button"
+              onClick={() => void handleLogout()}
+            >
+              Sair
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[24px] border border-border bg-card p-6">
+            <div className="mb-5">
+              <h2 className="text-2xl font-semibold text-white">
+                {editingProductId === null ? "Novo produto" : "Editar produto"}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-card-foreground">
+                {editingProductId === null
+                  ? "Preencha os dados principais do produto para salvar no banco."
+                  : "Voce esta editando um produto existente. Altere os campos e salve novamente."}
+              </p>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">Nome</span>
+                <input
+                  className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                  value={formData.name}
+                  onChange={(event) => updateField("name", event.target.value)}
+                  placeholder="iPhone 15 Pro Max 256GB"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  Categoria
+                </span>
+                <input
+                  className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                  value={formData.category}
+                  onChange={(event) =>
+                    updateField("category", event.target.value)
+                  }
+                  placeholder="iphone"
+                />
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">Preco</span>
+                  <input
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(event) =>
+                      updateField("price", event.target.value)
+                    }
+                    placeholder="5999.90"
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Condicao
+                  </span>
+                  <select
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.condition}
+                    onChange={(event) =>
+                      updateField(
+                        "condition",
+                        event.target.value as ProductFormData["condition"],
+                      )
+                    }
+                  >
+                    <option value="novo">Novo</option>
+                    <option value="usado">Usado</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  Descricao
+                </span>
+                <textarea
+                  className="min-h-28 w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                  value={formData.description}
+                  onChange={(event) =>
+                    updateField("description", event.target.value)
+                  }
+                  placeholder="Aparelho em excelente estado, bateria em dia e garantia."
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  URL da imagem de capa
+                </span>
+                <input
+                  className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                  value={formData.cover_image}
+                  onChange={(event) =>
+                    updateField("cover_image", event.target.value)
+                  }
+                  placeholder="https://..."
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  Upload da imagem
+                </span>
+                <input
+                  className="w-full rounded-2xl border border-dashed border-border bg-black/30 px-4 py-3 text-sm text-card-foreground outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:border-brand"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+
+                    if (!file) {
+                      return;
+                    }
+
+                    void handleImageUpload(file);
+                    event.target.value = "";
+                  }}
+                />
+                <p className="text-xs leading-5 text-card-foreground">
+                  Envie a foto do produto para preencher automaticamente a capa.
+                </p>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
+                  URL do video
+                </span>
+                <input
+                  className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                  value={formData.video_url}
+                  onChange={(event) =>
+                    updateField("video_url", event.target.value)
+                  }
+                  placeholder="https://..."
+                />
+              </label>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground">
+                <input
+                  type="checkbox"
+                  checked={formData.is_active}
+                  onChange={(event) =>
+                    updateField("is_active", event.target.checked)
+                  }
+                />
+                Produto ativo na vitrine
+              </label>
+
+              {feedback ? (
+                <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white">
+                  {feedback}
+                </div>
+              ) : null}
+
+              {errorMessage ? (
+                <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {errorMessage}
+                </div>
+              ) : null}
+
+              <button
+                className="w-full rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                type="submit"
+                disabled={isSubmitting || isUploadingImage}
+              >
+                {isSubmitting
+                  ? "Salvando..."
+                  : isUploadingImage
+                    ? "Enviando imagem..."
+                  : editingProductId === null
+                    ? "Salvar produto"
+                    : "Atualizar produto"}
+              </button>
+
+              {editingProductId !== null ? (
+                <button
+                  className="w-full rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-card-foreground transition hover:border-white hover:text-white"
+                  type="button"
+                  onClick={resetForm}
+                >
+                  Cancelar edicao
+                </button>
+              ) : null}
+            </form>
+          </div>
+
+          <div className="rounded-[24px] border border-border bg-card p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">
+                  Produtos cadastrados
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-card-foreground">
+                  Esta lista esta vindo diretamente da tabela products.
+                </p>
+              </div>
+
+              <button
+                className="rounded-full border border-border px-4 py-2 text-sm text-card-foreground transition hover:border-brand hover:text-white"
+                type="button"
+                onClick={() => void loadProducts()}
+              >
+                Atualizar
+              </button>
+            </div>
+
+            {isLoading ? (
+              <div className="rounded-2xl border border-border bg-black/20 px-4 py-6 text-sm text-card-foreground">
+                Carregando produtos...
+              </div>
+            ) : null}
+
+            {!isLoading && products.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-black/20 px-4 py-6 text-sm text-card-foreground">
+                Nenhum produto cadastrado ainda.
+              </div>
+            ) : null}
+
+            {!isLoading && products.length > 0 ? (
+              <div className="space-y-3">
+                {products.map((product) => (
+                  <article
+                    key={product.id}
+                    className="rounded-[22px] border border-border bg-black/20 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-semibold text-white">
+                          {product.name}
+                        </h3>
+                        <div className="flex flex-wrap gap-2 text-xs text-card-foreground">
+                          <span className="rounded-full border border-border px-2 py-1">
+                            {product.category}
+                          </span>
+                          <span className="rounded-full border border-border px-2 py-1">
+                            {product.condition}
+                          </span>
+                          <span className="rounded-full border border-border px-2 py-1">
+                            slug: {product.slug}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          product.is_active
+                            ? "bg-brand/15 text-brand"
+                            : "bg-zinc-700/40 text-zinc-300"
+                        }`}
+                      >
+                        {product.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 text-sm text-card-foreground sm:grid-cols-2">
+                      <div className="rounded-2xl border border-border px-3 py-2">
+                        Preco: R$ {Number(product.price).toFixed(2)}
+                      </div>
+                      <div className="rounded-2xl border border-border px-3 py-2">
+                        Criado em:{" "}
+                        {new Date(product.created_at).toLocaleDateString(
+                          "pt-BR",
+                        )}
+                      </div>
+                    </div>
+
+                    {product.description ? (
+                      <p className="mt-4 text-sm leading-6 text-card-foreground">
+                        {product.description}
+                      </p>
+                    ) : null}
+
+                    {product.cover_image ? (
+                      <div className="mt-4 overflow-hidden rounded-[20px] border border-border">
+                        <Image
+                          src={product.cover_image}
+                          alt={product.name}
+                          width={640}
+                          height={320}
+                          className="h-44 w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+                      <div className="text-xs text-card-foreground">
+                        ID: {product.id}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="rounded-full border border-border px-4 py-2 text-sm text-card-foreground transition hover:border-white hover:text-white"
+                          type="button"
+                          onClick={() => startEditing(product)}
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          className="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          type="button"
+                          onClick={() => void handleDelete(product.id)}
+                          disabled={deletingProductId === product.id}
+                        >
+                          {deletingProductId === product.id
+                            ? "Excluindo..."
+                            : "Excluir"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
