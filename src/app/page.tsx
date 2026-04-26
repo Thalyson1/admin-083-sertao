@@ -16,6 +16,12 @@ type Product = {
   description: string | null;
   video_url: string | null;
   cover_image: string | null;
+  storage?: string | null;
+  color?: string | null;
+  screen_size?: string | null;
+  camera?: string | null;
+  stock_status?: string | null;
+  featured?: boolean;
   is_active: boolean;
   created_at: string;
 };
@@ -28,6 +34,12 @@ type ProductFormData = {
   description: string;
   video_url: string;
   cover_image: string;
+  storage: string;
+  color: string;
+  screen_size: string;
+  camera: string;
+  stock_status: string;
+  featured: boolean;
   is_active: boolean;
 };
 
@@ -39,6 +51,12 @@ const initialFormData: ProductFormData = {
   description: "",
   video_url: "",
   cover_image: "",
+  storage: "",
+  color: "",
+  screen_size: "",
+  camera: "",
+  stock_status: "disponivel",
+  featured: false,
   is_active: true,
 };
 
@@ -59,6 +77,7 @@ export default function Home() {
   );
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   async function loadProducts() {
     setErrorMessage(null);
@@ -67,7 +86,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from("products")
       .select(
-        "id, name, slug, category, price, condition, description, video_url, cover_image, is_active, created_at",
+        "*",
       )
       .order("created_at", { ascending: false });
 
@@ -148,6 +167,12 @@ export default function Home() {
       description: product.description ?? "",
       video_url: product.video_url ?? "",
       cover_image: product.cover_image ?? "",
+      storage: product.storage ?? "",
+      color: product.color ?? "",
+      screen_size: product.screen_size ?? "",
+      camera: product.camera ?? "",
+      stock_status: product.stock_status ?? "disponivel",
+      featured: Boolean(product.featured),
       is_active: product.is_active,
     });
   }
@@ -215,12 +240,18 @@ export default function Home() {
     const payload = {
       name: formData.name.trim(),
       slug: generatedSlug,
-      category: formData.category.trim(),
+      category: formData.category.trim().toLowerCase(),
       price: Number(formData.price),
       condition: formData.condition,
       description: formData.description.trim() || null,
       video_url: formData.video_url.trim() || null,
       cover_image: formData.cover_image.trim() || null,
+      storage: formData.storage.trim() || null,
+      color: formData.color.trim() || null,
+      screen_size: formData.screen_size.trim() || null,
+      camera: formData.camera.trim() || null,
+      stock_status: formData.stock_status.trim().toLowerCase() || "disponivel",
+      featured: formData.featured,
       is_active: formData.is_active,
     };
 
@@ -304,6 +335,26 @@ export default function Home() {
     setFeedback("Produto excluido com sucesso.");
     setDeletingProductId(null);
   }
+
+  const filteredProducts = products.filter((product) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return [
+      product.name,
+      product.slug,
+      product.category,
+      product.description ?? "",
+      product.color ?? "",
+      product.storage ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
 
   if (!session) {
     return (
@@ -438,6 +489,34 @@ export default function Home() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Armazenamento
+                  </span>
+                  <input
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.storage}
+                    onChange={(event) =>
+                      updateField("storage", event.target.value)
+                    }
+                    placeholder="128 GB"
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">Cor</span>
+                  <input
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.color}
+                    onChange={(event) =>
+                      updateField("color", event.target.value)
+                    }
+                    placeholder="Preto"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
                   <span className="text-sm font-medium text-white">Preco</span>
                   <input
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
@@ -485,6 +564,36 @@ export default function Home() {
                   placeholder="Aparelho em excelente estado, bateria em dia e garantia."
                 />
               </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Tamanho da tela
+                  </span>
+                  <input
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.screen_size}
+                    onChange={(event) =>
+                      updateField("screen_size", event.target.value)
+                    }
+                    placeholder='6,1"'
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Camera
+                  </span>
+                  <input
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.camera}
+                    onChange={(event) =>
+                      updateField("camera", event.target.value)
+                    }
+                    placeholder="48 MP"
+                  />
+                </label>
+              </div>
 
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-white">
@@ -537,6 +646,36 @@ export default function Home() {
                   placeholder="https://..."
                 />
               </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Status de estoque
+                  </span>
+                  <select
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.stock_status}
+                    onChange={(event) =>
+                      updateField("stock_status", event.target.value)
+                    }
+                  >
+                    <option value="disponivel">Disponivel</option>
+                    <option value="sob-consulta">Sob consulta</option>
+                    <option value="esgotado">Esgotado</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground sm:mt-7">
+                  <input
+                    type="checkbox"
+                    checked={formData.featured}
+                    onChange={(event) =>
+                      updateField("featured", event.target.checked)
+                    }
+                  />
+                  Produto em destaque
+                </label>
+              </div>
 
               <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground">
                 <input
@@ -607,21 +746,33 @@ export default function Home() {
               </button>
             </div>
 
+            <label className="mb-5 block space-y-2">
+              <span className="text-sm font-medium text-white">
+                Buscar no painel
+              </span>
+              <input
+                className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Buscar por nome, slug, categoria, cor..."
+              />
+            </label>
+
             {isLoading ? (
               <div className="rounded-2xl border border-border bg-black/20 px-4 py-6 text-sm text-card-foreground">
                 Carregando produtos...
               </div>
             ) : null}
 
-            {!isLoading && products.length === 0 ? (
+            {!isLoading && filteredProducts.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-black/20 px-4 py-6 text-sm text-card-foreground">
-                Nenhum produto cadastrado ainda.
+                Nenhum produto encontrado com esse filtro.
               </div>
             ) : null}
 
-            {!isLoading && products.length > 0 ? (
+            {!isLoading && filteredProducts.length > 0 ? (
               <div className="space-y-3">
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <article
                     key={product.id}
                     className="rounded-[22px] border border-border bg-black/20 p-4"
@@ -638,6 +789,11 @@ export default function Home() {
                           <span className="rounded-full border border-border px-2 py-1">
                             {product.condition}
                           </span>
+                          {product.featured ? (
+                            <span className="rounded-full border border-brand/40 bg-brand/10 px-2 py-1 text-brand">
+                              destaque
+                            </span>
+                          ) : null}
                           <span className="rounded-full border border-border px-2 py-1">
                             slug: {product.slug}
                           </span>
@@ -666,6 +822,40 @@ export default function Home() {
                         )}
                       </div>
                     </div>
+
+                    {(product.storage ||
+                      product.color ||
+                      product.screen_size ||
+                      product.camera ||
+                      product.stock_status) && (
+                      <div className="mt-3 grid gap-3 text-sm text-card-foreground sm:grid-cols-2">
+                        {product.storage ? (
+                          <div className="rounded-2xl border border-border px-3 py-2">
+                            Armazenamento: {product.storage}
+                          </div>
+                        ) : null}
+                        {product.color ? (
+                          <div className="rounded-2xl border border-border px-3 py-2">
+                            Cor: {product.color}
+                          </div>
+                        ) : null}
+                        {product.screen_size ? (
+                          <div className="rounded-2xl border border-border px-3 py-2">
+                            Tela: {product.screen_size}
+                          </div>
+                        ) : null}
+                        {product.camera ? (
+                          <div className="rounded-2xl border border-border px-3 py-2">
+                            Camera: {product.camera}
+                          </div>
+                        ) : null}
+                        {product.stock_status ? (
+                          <div className="rounded-2xl border border-border px-3 py-2">
+                            Estoque: {product.stock_status}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
 
                     {product.description ? (
                       <p className="mt-4 text-sm leading-6 text-card-foreground">

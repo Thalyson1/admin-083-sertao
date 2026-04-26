@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { productSelectFields } from "@/lib/products";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function OPTIONS() {
@@ -15,20 +16,30 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get("category");
+  const featured = searchParams.get("featured");
+  const search = searchParams.get("search");
   const limitParam = searchParams.get("limit");
   const limit = Math.min(Number(limitParam || "50"), 100);
 
   let query = supabaseServer
     .from("products")
-    .select(
-      "id, name, slug, category, price, condition, description, video_url, cover_image, is_active, created_at",
-    )
+    .select(productSelectFields)
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(Number.isNaN(limit) ? 50 : limit);
 
   if (category) {
     query = query.ilike("category", category);
+  }
+
+  if (featured === "true") {
+    query = query.eq("featured", true);
+  }
+
+  if (search) {
+    query = query.or(
+      `name.ilike.%${search}%,description.ilike.%${search}%,slug.ilike.%${search}%`,
+    );
   }
 
   const { data, error } = await query;

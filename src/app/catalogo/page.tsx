@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { productSelectFields } from "@/lib/products";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type Product = {
@@ -9,13 +10,22 @@ type Product = {
   price: number;
   condition: "novo" | "usado";
   description: string | null;
+  video_url: string | null;
   cover_image: string | null;
+  storage?: string | null;
+  color?: string | null;
+  screen_size?: string | null;
+  camera?: string | null;
+  stock_status?: string | null;
+  featured?: boolean;
+  is_active: boolean;
+  created_at: string;
 };
 
 async function getProducts() {
   const { data, error } = await supabaseServer
     .from("products")
-    .select("id, name, slug, category, price, condition, description, cover_image")
+    .select(productSelectFields)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
@@ -88,6 +98,15 @@ export default async function CatalogoPage() {
                     <p className="mt-2 text-sm text-card-foreground">
                       slug: {product.slug}
                     </p>
+                    {[product.storage, product.color, product.screen_size]
+                      .filter(Boolean)
+                      .length > 0 && (
+                      <p className="mt-2 text-sm text-card-foreground">
+                        {[product.storage, product.color, product.screen_size]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </p>
+                    )}
                   </div>
 
                   <p className="text-2xl font-semibold text-brand">

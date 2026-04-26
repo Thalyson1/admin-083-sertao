@@ -10,10 +10,23 @@ create table if not exists public.products (
   description text,
   video_url text,
   cover_image text,
+  storage text,
+  color text,
+  screen_size text,
+  camera text,
+  stock_status text not null default 'disponivel',
+  featured boolean not null default false,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.products add column if not exists storage text;
+alter table public.products add column if not exists color text;
+alter table public.products add column if not exists screen_size text;
+alter table public.products add column if not exists camera text;
+alter table public.products add column if not exists stock_status text not null default 'disponivel';
+alter table public.products add column if not exists featured boolean not null default false;
 
 create or replace function public.set_current_timestamp_updated_at()
 returns trigger
