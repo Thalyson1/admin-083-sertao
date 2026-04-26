@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { productSelectFields } from "@/lib/products";
+import { attachProductImages, productSelectFields } from "@/lib/products";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type Product = {
@@ -20,6 +20,14 @@ type Product = {
   featured?: boolean;
   is_active: boolean;
   created_at: string;
+  product_images?: {
+    id: number;
+    product_id: number;
+    image_url: string;
+    sort_order: number;
+    is_primary: boolean;
+    created_at: string;
+  }[];
 };
 
 async function getProducts() {
@@ -33,7 +41,12 @@ async function getProducts() {
     throw new Error(error.message);
   }
 
-  return (data ?? []) as Product[];
+  return (await attachProductImages(
+    (data ?? []) as Array<{
+      id: number;
+      [key: string]: unknown;
+    }>,
+  )) as Product[];
 }
 
 export default async function CatalogoPage() {

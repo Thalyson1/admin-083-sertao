@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { productSelectFields } from "@/lib/products";
+import {
+  attachProductImages,
+  productSelectFields,
+} from "@/lib/products";
 
 type RouteContext = {
   params: Promise<{
@@ -53,6 +56,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
 
+  const [productWithImages] = await attachProductImages([data]);
+
   const { data: relatedProducts, error: relatedError } = await supabaseServer
     .from("products")
     .select(productSelectFields)
@@ -75,10 +80,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
 
+  const relatedWithImages = await attachProductImages(
+    (relatedProducts ?? []) as Array<{
+      id: number;
+      [key: string]: unknown;
+    }>,
+  );
+
   return NextResponse.json(
     {
-      product: data,
-      relatedProducts: relatedProducts ?? [],
+      product: productWithImages,
+      relatedProducts: relatedWithImages,
     },
     {
       headers: {

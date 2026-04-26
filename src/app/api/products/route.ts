@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { productSelectFields } from "@/lib/products";
+import { attachProductImages, productSelectFields } from "@/lib/products";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function OPTIONS() {
@@ -56,10 +56,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const productsWithImages = await attachProductImages(
+    (data ?? []) as Array<{
+      id: number;
+      [key: string]: unknown;
+    }>,
+  );
+
   return NextResponse.json(
     {
-      products: data ?? [],
-      total: data?.length ?? 0,
+      products: productsWithImages,
+      total: productsWithImages.length,
     },
     {
       headers: {

@@ -1,10 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { productSelectFields } from "@/lib/products";
 import { slugify } from "@/lib/utils";
+
+type ProductImage = {
+  id?: number;
+  image_url: string;
+  sort_order: number;
+  is_primary: boolean;
+  created_at?: string;
+};
 
 type Product = {
   id: number;
@@ -24,6 +33,7 @@ type Product = {
   featured?: boolean;
   is_active: boolean;
   created_at: string;
+  product_images?: ProductImage[];
 };
 
 type ProductFormData = {
@@ -68,9 +78,11 @@ export default function Home() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
   const [products, setProducts] = useState<Product[]>([]);
+  const [galleryImages, setGalleryImages] = useState<ProductImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<number | null>(
     null,
@@ -79,15 +91,49 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
+  async function attachGalleryToProducts(baseProducts: Product[]) {
+    if (baseProducts.length === 0) {
+      return [];
+    }
+
+    const productIds = baseProducts.map((product) => product.id);
+
+    const { data, error } = await supabase
+      .from("product_images")
+      .select("id, product_id, image_url, sort_order, is_primary, created_at")
+      .in("product_id", productIds)
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      return baseProducts.map((product) => ({
+        ...product,
+        product_images: [],
+      }));
+    }
+
+    const imageMap = new Map<number, ProductImage[]>();
+
+    for (const image of (data ?? []) as Array<
+      ProductImage & { product_id: number }
+    >) {
+      const current = imageMap.get(image.product_id) ?? [];
+      current.push(image);
+      imageMap.set(image.product_id, current);
+    }
+
+    return baseProducts.map((product) => ({
+      ...product,
+      product_images: imageMap.get(product.id) ?? [],
+    }));
+  }
+
   async function loadProducts() {
     setErrorMessage(null);
     setIsLoading(true);
 
     const { data, error } = await supabase
       .from("products")
-      .select(
-        "*",
-      )
+      .select(productSelectFields)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -97,9 +143,17 @@ export default function Home() {
       return;
     }
 
-    setProducts((data ?? []) as Product[]);
+    const productsWithGallery = await attachGalleryToProducts(
+      (data ?? []) as Product[],
+    );
+
+    setProducts(productsWithGallery);
     setIsLoading(false);
   }
+
+  const loadProductsEvent = useEffectEvent(async () => {
+    await loadProducts();
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -117,7 +171,7 @@ export default function Home() {
       setIsLoading(false);
 
       if (currentSession) {
-        void loadProducts();
+        void loadProductsEvent();
       }
     }
 
@@ -129,7 +183,7 @@ export default function Home() {
       setSession(nextSession);
 
       if (nextSession) {
-        void loadProducts();
+        void loadProductsEvent();
         return;
       }
 
@@ -175,11 +229,58 @@ export default function Home() {
       featured: Boolean(product.featured),
       is_active: product.is_active,
     });
+    setGalleryImages(
+      [...(product.product_images ?? [])].sort(
+        (left, right) => left.sort_order - right.sort_order,
+      ),
+    );
   }
 
   function resetForm() {
     setEditingProductId(null);
     setFormData(initialFormData);
+    setGalleryImages([]);
+  }
+
+  function removeGalleryImage(indexToRemove: number) {
+    setGalleryImages((current) =>
+      current
+        .filter((_, index) => index !== indexToRemove)
+        .map((image, index) => ({
+          ...image,
+          sort_order: index,
+        })),
+    );
+  }
+
+  async function saveGalleryImages(productId: number) {
+    const galleryPayload = galleryImages.map((image, index) => ({
+      product_id: productId,
+      image_url: image.image_url,
+      sort_order: index,
+      is_primary: index === 0,
+    }));
+
+    const { error: deleteError } = await supabase
+      .from("product_images")
+      .delete()
+      .eq("product_id", productId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    if (galleryPayload.length === 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from("product_images")
+      .insert(galleryPayload);
+
+    if (insertError) {
+      throw insertError;
+    }
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -255,16 +356,38 @@ export default function Home() {
       is_active: formData.is_active,
     };
 
-    const { error } =
+    const { data, error } =
       editingProductId === null
-        ? await supabase.from("products").insert(payload)
+        ? await supabase.from("products").insert(payload).select("id").single()
         : await supabase
             .from("products")
             .update(payload)
+            .select("id")
             .eq("id", editingProductId);
 
     if (error) {
       setErrorMessage(error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const savedProductId =
+      editingProductId ?? (Array.isArray(data) ? data[0]?.id : data?.id);
+
+    if (!savedProductId) {
+      setErrorMessage("Nao foi possivel identificar o produto salvo.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await saveGalleryImages(savedProductId);
+    } catch (galleryError) {
+      const message =
+        galleryError instanceof Error
+          ? galleryError.message
+          : "Erro ao salvar a galeria do produto.";
+      setErrorMessage(message);
       setIsSubmitting(false);
       return;
     }
@@ -308,6 +431,61 @@ export default function Home() {
     updateField("cover_image", data.publicUrl);
     setFeedback("Imagem enviada com sucesso.");
     setIsUploadingImage(false);
+  }
+
+  async function handleGalleryUpload(files: FileList) {
+    setFeedback(null);
+    setErrorMessage(null);
+    setIsUploadingGallery(true);
+
+    try {
+      const uploadedImages: ProductImage[] = [];
+
+      for (const file of Array.from(files)) {
+        const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+        const fileName = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const filePath = `products/gallery/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(storageBucket)
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data } = supabase.storage
+          .from(storageBucket)
+          .getPublicUrl(filePath);
+
+        uploadedImages.push({
+          image_url: data.publicUrl,
+          sort_order: 0,
+          is_primary: false,
+        });
+      }
+
+      setGalleryImages((current) => {
+        const next = [...current, ...uploadedImages];
+        return next.map((image, index) => ({
+          ...image,
+          sort_order: index,
+          is_primary: index === 0,
+        }));
+      });
+      setFeedback("Imagens adicionais enviadas com sucesso.");
+    } catch (galleryError) {
+      const message =
+        galleryError instanceof Error
+          ? galleryError.message
+          : "Erro ao enviar as imagens adicionais.";
+      setErrorMessage(message);
+    } finally {
+      setIsUploadingGallery(false);
+    }
   }
 
   async function handleDelete(productId: number) {
@@ -635,6 +813,75 @@ export default function Home() {
 
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-white">
+                  Galeria adicional
+                </span>
+                <input
+                  className="w-full rounded-2xl border border-dashed border-border bg-black/30 px-4 py-3 text-sm text-card-foreground outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:border-brand"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => {
+                    const files = event.target.files;
+
+                    if (!files || files.length === 0) {
+                      return;
+                    }
+
+                    void handleGalleryUpload(files);
+                    event.target.value = "";
+                  }}
+                />
+                <p className="text-xs leading-5 text-card-foreground">
+                  Adicione mais fotos reais do produto para usar em carrossel ou
+                  galeria.
+                </p>
+              </label>
+
+              {galleryImages.length > 0 ? (
+                <div className="space-y-3 rounded-2xl border border-border bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-white">
+                      Imagens da galeria
+                    </span>
+                    <span className="text-xs text-card-foreground">
+                      A primeira imagem da lista vira a principal da galeria.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {galleryImages.map((image, index) => (
+                      <div
+                        key={`${image.image_url}-${index}`}
+                        className="overflow-hidden rounded-2xl border border-border bg-black/30"
+                      >
+                        <Image
+                          src={image.image_url}
+                          alt={`Imagem ${index + 1} da galeria`}
+                          width={240}
+                          height={240}
+                          className="h-28 w-full object-cover"
+                        />
+                        <div className="space-y-2 p-3">
+                          <div className="text-xs text-card-foreground">
+                            Ordem {index + 1}
+                            {index === 0 ? " • principal" : ""}
+                          </div>
+                          <button
+                            type="button"
+                            className="w-full rounded-full border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/10"
+                            onClick={() => removeGalleryImage(index)}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white">
                   URL do video
                 </span>
                 <input
@@ -703,12 +950,16 @@ export default function Home() {
               <button
                 className="w-full rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 type="submit"
-                disabled={isSubmitting || isUploadingImage}
+                disabled={
+                  isSubmitting || isUploadingImage || isUploadingGallery
+                }
               >
                 {isSubmitting
                   ? "Salvando..."
                   : isUploadingImage
                     ? "Enviando imagem..."
+                  : isUploadingGallery
+                    ? "Enviando galeria..."
                   : editingProductId === null
                     ? "Salvar produto"
                     : "Atualizar produto"}
@@ -872,6 +1123,34 @@ export default function Home() {
                           height={320}
                           className="h-44 w-full object-cover"
                         />
+                      </div>
+                    ) : null}
+
+                    {product.product_images && product.product_images.length > 0 ? (
+                      <div className="mt-3">
+                        <div className="mb-2 text-xs text-card-foreground">
+                          Galeria adicional: {product.product_images.length} imagem(ns)
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {product.product_images
+                            .slice()
+                            .sort((left, right) => left.sort_order - right.sort_order)
+                            .slice(0, 3)
+                            .map((image) => (
+                              <div
+                                key={image.id ?? image.image_url}
+                                className="overflow-hidden rounded-2xl border border-border"
+                              >
+                                <Image
+                                  src={image.image_url}
+                                  alt={`Imagem de ${product.name}`}
+                                  width={180}
+                                  height={180}
+                                  className="h-20 w-full object-cover"
+                                />
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     ) : null}
 
