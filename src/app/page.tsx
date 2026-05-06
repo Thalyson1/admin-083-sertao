@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useEffectEvent, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { productSelectFields } from "@/lib/products";
@@ -70,8 +70,23 @@ const initialFormData: ProductFormData = {
   is_active: true,
 };
 
+// Categorias disponíveis para seleção
+const PRODUCT_CATEGORIES = [
+  "iPhone",
+  "Samsung",
+  "Xiaomi",
+  "Motorola",
+  "Google Pixel",
+  "OnePlus",
+  "Outros Celulares",
+  "Tablets",
+  "Smartwatch",
+  "Acessórios",
+];
+
 export default function Home() {
   const storageBucket = "product-images";
+  const formRef = useRef<HTMLDivElement>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -234,6 +249,11 @@ export default function Home() {
         (left, right) => left.sort_order - right.sort_order,
       ),
     );
+    
+    // Scroll para o formulário
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   }
 
   function resetForm() {
@@ -574,14 +594,14 @@ export default function Home() {
             </label>
 
             {feedback ? (
-              <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white">
-                {feedback}
+              <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white font-medium">
+                ✓ {feedback}
               </div>
             ) : null}
 
             {errorMessage ? (
-              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                {errorMessage}
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 font-medium">
+                ⚠ {errorMessage}
               </div>
             ) : null}
 
@@ -628,11 +648,22 @@ export default function Home() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="rounded-[24px] border border-border bg-card p-6">
+          <div ref={formRef} className={`rounded-[24px] border transition-all ${
+            editingProductId !== null 
+              ? "border-brand/60 bg-card/80 ring-2 ring-brand/20" 
+              : "border-border bg-card"
+          } p-6`}>
             <div className="mb-5">
-              <h2 className="text-2xl font-semibold text-white">
-                {editingProductId === null ? "Novo produto" : "Editar produto"}
-              </h2>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-2xl font-semibold text-white">
+                  {editingProductId === null ? "Novo produto" : "Editar produto"}
+                </h2>
+                {editingProductId !== null && (
+                  <span className="inline-flex rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
+                    EM EDIÇÃO
+                  </span>
+                )}
+              </div>
               <p className="mt-2 text-sm leading-6 text-card-foreground">
                 {editingProductId === null
                   ? "Preencha os dados principais do produto para salvar no banco."
@@ -651,51 +682,27 @@ export default function Home() {
                 />
               </label>
 
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-white">
-                  Categoria
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                  value={formData.category}
-                  onChange={(event) =>
-                    updateField("category", event.target.value)
-                  }
-                  placeholder="iphone"
-                />
-              </label>
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">
-                    Armazenamento
-                  </span>
-                  <input
+                  <span className="text-sm font-medium text-white">Categoria *</span>
+                  <select
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                    value={formData.storage}
+                    value={formData.category}
                     onChange={(event) =>
-                      updateField("storage", event.target.value)
+                      updateField("category", event.target.value)
                     }
-                    placeholder="128 GB"
-                  />
+                  >
+                    <option value="">👇 Escolha uma categoria</option>
+                    {PRODUCT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat.toLowerCase()}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">Cor</span>
-                  <input
-                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                    value={formData.color}
-                    onChange={(event) =>
-                      updateField("color", event.target.value)
-                    }
-                    placeholder="Preto"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">Preco</span>
+                  <span className="text-sm font-medium text-white">Preço *</span>
                   <input
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
                     type="number"
@@ -708,10 +715,12 @@ export default function Home() {
                     placeholder="5999.90"
                   />
                 </label>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-white">
-                    Condicao
+                    Condição
                   </span>
                   <select
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
@@ -727,11 +736,28 @@ export default function Home() {
                     <option value="usado">Usado</option>
                   </select>
                 </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-white">
+                    Status de estoque
+                  </span>
+                  <select
+                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                    value={formData.stock_status}
+                    onChange={(event) =>
+                      updateField("stock_status", event.target.value)
+                    }
+                  >
+                    <option value="disponivel">Disponivel</option>
+                    <option value="sob-consulta">Sob consulta</option>
+                    <option value="esgotado">Esgotado</option>
+                  </select>
+                </label>
               </div>
 
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-white">
-                  Descricao
+                  Descrição
                 </span>
                 <textarea
                   className="min-h-28 w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
@@ -743,32 +769,82 @@ export default function Home() {
                 />
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">
-                    Tamanho da tela
-                  </span>
-                  <input
-                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                    value={formData.screen_size}
-                    onChange={(event) =>
-                      updateField("screen_size", event.target.value)
-                    }
-                    placeholder='6,1"'
-                  />
-                </label>
+              <div className="rounded-2xl border border-border/50 bg-black/30 p-4 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-white mb-3">
+                    ℹ️ Informações Adicionais
+                  </h3>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-white">
+                      Armazenamento
+                    </span>
+                    <input
+                      className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                      value={formData.storage}
+                      onChange={(event) =>
+                        updateField("storage", event.target.value)
+                      }
+                      placeholder="128 GB"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-white">Cor</span>
+                    <input
+                      className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                      value={formData.color}
+                      onChange={(event) =>
+                        updateField("color", event.target.value)
+                      }
+                      placeholder="Preto"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-white">
+                      Tamanho da tela
+                    </span>
+                    <input
+                      className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                      value={formData.screen_size}
+                      onChange={(event) =>
+                        updateField("screen_size", event.target.value)
+                      }
+                      placeholder='6,1"'
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-white">
+                      Camera
+                    </span>
+                    <input
+                      className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
+                      value={formData.camera}
+                      onChange={(event) =>
+                        updateField("camera", event.target.value)
+                      }
+                      placeholder="48 MP"
+                    />
+                  </label>
+                </div>
 
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-white">
-                    Camera
+                    URL do video
                   </span>
                   <input
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                    value={formData.camera}
+                    value={formData.video_url}
                     onChange={(event) =>
-                      updateField("camera", event.target.value)
+                      updateField("video_url", event.target.value)
                     }
-                    placeholder="48 MP"
+                    placeholder="https://..."
                   />
                 </label>
               </div>
@@ -895,24 +971,7 @@ export default function Home() {
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">
-                    Status de estoque
-                  </span>
-                  <select
-                    className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
-                    value={formData.stock_status}
-                    onChange={(event) =>
-                      updateField("stock_status", event.target.value)
-                    }
-                  >
-                    <option value="disponivel">Disponivel</option>
-                    <option value="sob-consulta">Sob consulta</option>
-                    <option value="esgotado">Esgotado</option>
-                  </select>
-                </label>
-
-                <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground sm:mt-7">
+                <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground">
                   <input
                     type="checkbox"
                     checked={formData.featured}
@@ -922,28 +981,28 @@ export default function Home() {
                   />
                   Produto em destaque
                 </label>
+
+                <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(event) =>
+                      updateField("is_active", event.target.checked)
+                    }
+                  />
+                  Produto ativo na vitrine
+                </label>
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-black/20 px-4 py-3 text-sm text-card-foreground">
-                <input
-                  type="checkbox"
-                  checked={formData.is_active}
-                  onChange={(event) =>
-                    updateField("is_active", event.target.checked)
-                  }
-                />
-                Produto ativo na vitrine
-              </label>
-
               {feedback ? (
-                <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white">
-                  {feedback}
+                <div className="rounded-2xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-white font-medium">
+                  ✓ {feedback}
                 </div>
               ) : null}
 
               {errorMessage ? (
-                <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                  {errorMessage}
+                <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 font-medium">
+                  ⚠ {errorMessage}
                 </div>
               ) : null}
 
@@ -1026,13 +1085,24 @@ export default function Home() {
                 {filteredProducts.map((product) => (
                   <article
                     key={product.id}
-                    className="rounded-[22px] border border-border bg-black/20 p-4"
+                    className={`rounded-[22px] border transition-all ${
+                      editingProductId === product.id
+                        ? "border-brand/60 bg-black/40 ring-2 ring-brand/30"
+                        : "border-border bg-black/20"
+                    } p-4`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-2">
-                        <h3 className="text-lg font-semibold text-white">
-                          {product.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">
+                            {product.name}
+                          </h3>
+                          {editingProductId === product.id && (
+                            <span className="inline-flex rounded-full bg-brand/20 px-2 py-0.5 text-xs font-semibold text-brand">
+                              Editando
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-2 text-xs text-card-foreground">
                           <span className="rounded-full border border-border px-2 py-1">
                             {product.category}
@@ -1161,11 +1231,11 @@ export default function Home() {
 
                       <div className="flex items-center gap-2">
                         <button
-                          className="rounded-full border border-border px-4 py-2 text-sm text-card-foreground transition hover:border-white hover:text-white"
+                          className="rounded-full border border-border bg-brand/10 px-4 py-2 text-sm font-medium text-brand transition hover:bg-brand/20 hover:border-brand"
                           type="button"
                           onClick={() => startEditing(product)}
                         >
-                          Editar
+                          ✎ Editar
                         </button>
 
                         <button
