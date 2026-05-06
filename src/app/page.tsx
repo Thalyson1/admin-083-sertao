@@ -692,7 +692,7 @@ export default function Home() {
                       updateField("category", event.target.value)
                     }
                   >
-                    <option value="">👇 Escolha uma categoria</option>
+                    <option value="">Escolha uma categoria</option>
                     {PRODUCT_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat.toLowerCase()}>
                         {cat}
