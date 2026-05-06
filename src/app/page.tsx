@@ -102,6 +102,7 @@ export default function Home() {
   const [deletingProductId, setDeletingProductId] = useState<number | null>(
     null,
   );
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -521,6 +522,7 @@ export default function Home() {
     if (error) {
       setErrorMessage(error.message);
       setDeletingProductId(null);
+      setConfirmDeleteId(null);
       return;
     }
 
@@ -532,6 +534,7 @@ export default function Home() {
     }
     setFeedback("Produto excluido com sucesso.");
     setDeletingProductId(null);
+    setConfirmDeleteId(null);
   }
 
   const filteredProducts = products.filter((product) => {
@@ -673,7 +676,7 @@ export default function Home() {
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-white">Nome</span>
+                <span className="text-base font-medium text-white">Nome</span>
                 <input
                   className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
                   value={formData.name}
@@ -684,7 +687,7 @@ export default function Home() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">Categoria *</span>
+                <span className="text-base font-medium text-white">Categoria *</span>
                   <select
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
                     value={formData.category}
@@ -702,7 +705,7 @@ export default function Home() {
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-white">Preço *</span>
+                  <span className="text-base font-medium text-white">Preço *</span>
                   <input
                     className="w-full rounded-2xl border border-border bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-brand"
                     type="number"
@@ -756,7 +759,7 @@ export default function Home() {
               </div>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-white">
+                <span className="text-base font-medium text-white">
                   Descrição
                 </span>
                 <textarea
@@ -1089,10 +1092,10 @@ export default function Home() {
                       editingProductId === product.id
                         ? "border-brand/60 bg-black/40 ring-2 ring-brand/30"
                         : "border-border bg-black/20"
-                    } p-4`}
+                    } p-6`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <h3 className="text-lg font-semibold text-white">
                             {product.name}
@@ -1103,19 +1106,19 @@ export default function Home() {
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-card-foreground">
-                          <span className="rounded-full border border-border px-2 py-1">
+                        <div className="flex flex-wrap gap-3 text-sm text-card-foreground">
+                          <span className="rounded-full border border-border px-3 py-1.5">
                             {product.category}
                           </span>
-                          <span className="rounded-full border border-border px-2 py-1">
+                          <span className="rounded-full border border-border px-3 py-1.5">
                             {product.condition}
                           </span>
                           {product.featured ? (
-                            <span className="rounded-full border border-brand/40 bg-brand/10 px-2 py-1 text-brand">
+                            <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-brand">
                               destaque
                             </span>
                           ) : null}
-                          <span className="rounded-full border border-border px-2 py-1">
+                          <span className="rounded-full border border-border px-3 py-1.5">
                             slug: {product.slug}
                           </span>
                         </div>
@@ -1132,12 +1135,12 @@ export default function Home() {
                       </span>
                     </div>
 
-                    <div className="mt-4 grid gap-3 text-sm text-card-foreground sm:grid-cols-2">
-                      <div className="rounded-2xl border border-border px-3 py-2">
-                        Preco: R$ {Number(product.price).toFixed(2)}
+                    <div className="mt-6 grid gap-4 text-base text-card-foreground sm:grid-cols-2">
+                      <div className="rounded-2xl border border-border px-4 py-3">
+                        <span className="font-medium">Preço:</span> R$ {Number(product.price).toFixed(2)}
                       </div>
-                      <div className="rounded-2xl border border-border px-3 py-2">
-                        Criado em:{" "}
+                      <div className="rounded-2xl border border-border px-4 py-3">
+                        <span className="font-medium">Criado em:</span>{" "}
                         {new Date(product.created_at).toLocaleDateString(
                           "pt-BR",
                         )}
@@ -1149,59 +1152,59 @@ export default function Home() {
                       product.screen_size ||
                       product.camera ||
                       product.stock_status) && (
-                      <div className="mt-3 grid gap-3 text-sm text-card-foreground sm:grid-cols-2">
+                      <div className="mt-4 grid gap-4 text-base text-card-foreground sm:grid-cols-2">
                         {product.storage ? (
-                          <div className="rounded-2xl border border-border px-3 py-2">
-                            Armazenamento: {product.storage}
+                          <div className="rounded-2xl border border-border px-4 py-3">
+                            <span className="font-medium">Armazenamento:</span> {product.storage}
                           </div>
                         ) : null}
                         {product.color ? (
-                          <div className="rounded-2xl border border-border px-3 py-2">
-                            Cor: {product.color}
+                          <div className="rounded-2xl border border-border px-4 py-3">
+                            <span className="font-medium">Cor:</span> {product.color}
                           </div>
                         ) : null}
                         {product.screen_size ? (
-                          <div className="rounded-2xl border border-border px-3 py-2">
-                            Tela: {product.screen_size}
+                          <div className="rounded-2xl border border-border px-4 py-3">
+                            <span className="font-medium">Tela:</span> {product.screen_size}
                           </div>
                         ) : null}
                         {product.camera ? (
-                          <div className="rounded-2xl border border-border px-3 py-2">
-                            Camera: {product.camera}
+                          <div className="rounded-2xl border border-border px-4 py-3">
+                            <span className="font-medium">Câmera:</span> {product.camera}
                           </div>
                         ) : null}
                         {product.stock_status ? (
-                          <div className="rounded-2xl border border-border px-3 py-2">
-                            Estoque: {product.stock_status}
+                          <div className="rounded-2xl border border-border px-4 py-3">
+                            <span className="font-medium">Estoque:</span> {product.stock_status}
                           </div>
                         ) : null}
                       </div>
                     )}
 
                     {product.description ? (
-                      <p className="mt-4 text-sm leading-6 text-card-foreground">
+                      <p className="mt-6 text-base leading-7 text-card-foreground">
                         {product.description}
                       </p>
                     ) : null}
 
                     {product.cover_image ? (
-                      <div className="mt-4 overflow-hidden rounded-[20px] border border-border">
+                      <div className="mt-6 overflow-hidden rounded-[20px] border border-border">
                         <Image
                           src={product.cover_image}
                           alt={product.name}
                           width={640}
                           height={320}
-                          className="h-44 w-full object-cover"
+                          className="h-48 w-full object-cover"
                         />
                       </div>
                     ) : null}
 
                     {product.product_images && product.product_images.length > 0 ? (
-                      <div className="mt-3">
-                        <div className="mb-2 text-xs text-card-foreground">
+                      <div className="mt-4">
+                        <div className="mb-3 text-sm text-card-foreground">
                           Galeria adicional: {product.product_images.length} imagem(ns)
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-3 gap-3">
                           {product.product_images
                             .slice()
                             .sort((left, right) => left.sort_order - right.sort_order)
@@ -1216,7 +1219,7 @@ export default function Home() {
                                   alt={`Imagem de ${product.name}`}
                                   width={180}
                                   height={180}
-                                  className="h-20 w-full object-cover"
+                                  className="h-24 w-full object-cover"
                                 />
                               </div>
                             ))}
@@ -1224,7 +1227,7 @@ export default function Home() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+                    <div className="mt-8 flex items-center justify-between gap-3 border-t border-border pt-6">
                       <div className="text-xs text-card-foreground">
                         ID: {product.id}
                       </div>
@@ -1239,14 +1242,11 @@ export default function Home() {
                         </button>
 
                         <button
-                          className="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-full border border-red-500/30 bg-transparent px-5 py-2.5 text-sm text-red-400 transition hover:bg-red-500/10 hover:border-red-500/50"
                           type="button"
-                          onClick={() => void handleDelete(product.id)}
-                          disabled={deletingProductId === product.id}
+                          onClick={() => setConfirmDeleteId(product.id)}
                         >
-                          {deletingProductId === product.id
-                            ? "Excluindo..."
-                            : "Excluir"}
+                          Excluir
                         </button>
                       </div>
                     </div>
@@ -1257,6 +1257,45 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {/* Modal de confirmação de exclusão */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-[24px] border border-border bg-card p-6">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Confirmar exclusão
+              </h3>
+              <p className="mt-2 text-sm text-card-foreground">
+                Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
+              </p>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                className="flex-1 rounded-2xl border border-border px-4 py-3 text-sm font-medium text-card-foreground transition hover:border-white hover:text-white"
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="flex-1 rounded-2xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                onClick={() => void handleDelete(confirmDeleteId)}
+                disabled={deletingProductId === confirmDeleteId}
+              >
+                {deletingProductId === confirmDeleteId
+                  ? "Excluindo..."
+                  : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
